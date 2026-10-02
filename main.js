@@ -1,66 +1,82 @@
-document.documentElement.classList.add('motion-ready');
-const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-const hero = document.querySelector('.hero');
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)');
+const hero = document.querySelector('.hero-journey');
+const services = document.querySelector('.services');
 const booking = document.querySelector('.booking');
-const video = document.querySelector('.hero-video');
 const cards = [...document.querySelectorAll('.service-card')];
+const clipper = document.querySelector('.clipper');
 const toTop = document.querySelector('.to-top');
-const clamp = (n, min = 0, max = 1) => Math.min(max, Math.max(min, n));
-let scrollScheduled = false;
+const video = document.querySelector('.hero-video');
+const clamp = (value, min = 0, max = 1) => Math.min(max, Math.max(min, value));
+let ticking = false;
 let bookingVisible = false;
 
-function renderScroll() {
-  scrollScheduled = false;
-  toTop.classList.toggle('is-visible', window.scrollY > window.innerHeight * .7 && !bookingVisible);
-  if (reducedMotion.matches) return;
-
-  const heroProgress = clamp(-hero.getBoundingClientRect().top / hero.offsetHeight);
-  hero.style.setProperty('--video-shift', `${(heroProgress * hero.offsetHeight * .28).toFixed(1)}px`);
-  hero.style.setProperty('--copy-shift', `${(heroProgress * hero.offsetHeight * .12).toFixed(1)}px`);
-  hero.style.setProperty('--copy-opacity', (1 - heroProgress * .55).toFixed(3));
-
+function updateScroll() {
+  ticking = false;
+  const y = window.scrollY;
+  toTop.classList.toggle('is-visible', y > window.innerHeight * .7 && !bookingVisible);
+  if (reduceMotion.matches) return;
+  const heroDistance = Math.max(1, hero.offsetHeight - window.innerHeight);
+  const heroProgress = clamp(-hero.getBoundingClientRect().top / heroDistance);
+  hero.style.setProperty('--hero-progress', heroProgress.toFixed(3));
+  const serviceRect = services.getBoundingClientRect();
+  const servicesProgress = clamp((window.innerHeight - serviceRect.top) / (serviceRect.height + window.innerHeight));
+  services.style.setProperty('--services-progress', servicesProgress.toFixed(3));
+  const bookingRect = booking.getBoundingClientRect();
+  booking.style.setProperty('--booking-progress', clamp((window.innerHeight - bookingRect.top) / (bookingRect.height + window.innerHeight)).toFixed(3));
   for (const [index, card] of cards.entries()) {
     const rect = card.getBoundingClientRect();
     const progress = clamp((window.innerHeight - rect.top) / (window.innerHeight + rect.height));
-    const drift = [48, -38, 54][index] * (.5 - progress);
-    card.style.setProperty('--drift', `${drift.toFixed(1)}px`);
+    const distance = [48, -42, 56][index];
+    card.style.setProperty('--card-y', `${((.5 - progress) * distance).toFixed(1)}px`);
+    card.style.setProperty('--card-r', `${((.5 - progress) * [-3, 2, -2][index]).toFixed(2)}deg`);
   }
 }
 function scheduleScroll() {
-  if (!scrollScheduled) {
-    scrollScheduled = true;
-    requestAnimationFrame(renderScroll);
-  }
+  if (!ticking) { ticking = true; requestAnimationFrame(updateScroll); }
 }
 window.addEventListener('scroll', scheduleScroll, { passive: true });
 window.addEventListener('resize', scheduleScroll, { passive: true });
-reducedMotion.addEventListener('change', scheduleScroll);
-scheduleScroll();
-
-const cardObserver = new IntersectionObserver(entries => {
-  for (const entry of entries) {
-    if (entry.isIntersecting) {
-      entry.target.classList.add('is-visible');
-      window.setTimeout(() => entry.target.classList.add('is-settled'), 1050);
-      cardObserver.unobserve(entry.target);
-    }
-  }
-}, { threshold: .12, rootMargin: '0px 0px 7% 0px' });
-for (const card of cards) cardObserver.observe(card);
-
+reduceMotion.addEventListener('change', scheduleScroll);
 const bookingObserver = new IntersectionObserver(([entry]) => {
   bookingVisible = entry.isIntersecting;
   scheduleScroll();
-});
+}, { threshold: 0 });
 bookingObserver.observe(booking);
+scheduleScroll();
 
+// Keep video resources for the opening; pause when well outside view.
 const videoObserver = new IntersectionObserver(([entry]) => {
-  if (entry.isIntersecting && !reducedMotion.matches) video.play().catch(() => {});
+  if (entry.isIntersecting && !reduceMotion.matches) video.play().catch(() => {});
   else video.pause();
-}, { rootMargin: '180px' });
+}, { rootMargin: '200px' });
 videoObserver.observe(hero);
-reducedMotion.addEventListener('change', () => {
-  if (reducedMotion.matches) video.pause();
+if (reduceMotion.matches) video.pause();
+reduceMotion.addEventListener('change', () => {
+  if (reduceMotion.matches) video.pause();
   else if (hero.getBoundingClientRect().bottom > 0) video.play().catch(() => {});
+});
+
+let targetX = 0, targetY = 0, currentX = 0, currentY = 0;
+let pointerFrame = 0;
+function animateClipper() {
+  currentX += (targetX - currentX) * .09;
+  currentY += (targetY - currentY) * .09;
+  clipper.style.setProperty('--clip-x', `${currentX.toFixed(1)}px`);
+  clipper.style.setProperty('--clip-y', `${currentY.toFixed(1)}px`);
+  clipper.style.setProperty('--clip-rot', `${(currentX * .12).toFixed(2)}deg`);
+  if (Math.abs(targetX - currentX) > .1 || Math.abs(targetY - currentY) > .1) pointerFrame = requestAnimationFrame(animateClipper);
+  else pointerFrame = 0;
+}
+services.addEventListener('pointermove', (event) => {
+  if (!finePointer.matches || reduceMotion.matches) return;
+  const bounds = services.getBoundingClientRect();
+  targetX = clamp((event.clientX - bounds.left) / bounds.width, 0, 1) * 42 - 21;
+  targetY = clamp((event.clientY - bounds.top) / bounds.height, 0, 1) * 26 - 13;
+  if (!pointerFrame) pointerFrame = requestAnimationFrame(animateClipper);
+}, { passive: true });
+services.addEventListener('pointerleave', () => {
+  targetX = targetY = 0;
+  if (!pointerFrame && !reduceMotion.matches) pointerFrame = requestAnimationFrame(animateClipper);
 });
 document.querySelector('#year').textContent = new Date().getFullYear();

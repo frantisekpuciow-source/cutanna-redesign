@@ -9,7 +9,7 @@ for (const name of ['index.html', 'styles.css', 'main.js']) {
 }
 for (const name of [
   'PouzeLogo-Cutanna.png', 'head_video_3.mp4', 'head-poster.jpg',
-  'mramor-textura-v2.png', 'nase-sluzby-moderni-strihy.webp',
+  'mramor-textura-v1.png', 'nase-sluzby-moderni-strihy.webp',
   'nase-sluzby-prijemne-prostredi.webp', 'nase-sluzby-tetovani.webp'
 ]) {
   await cp(new URL(`../_links/${name}`, import.meta.url), new URL(`_links/${name}`, output));
